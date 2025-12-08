@@ -1,20 +1,88 @@
-// client_mqueue.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-
 #include <iostream>
+#include <windows.h>
+#include "C:\Users\Max\source\repos\ipc-chat-project\Common\common.h"
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    std::wcout << L"[MQ Client] Запуск клієнта message queue...\n";
+
+    // 1. Відкриваємо file mapping для черги
+    HANDLE hMap = OpenFileMapping(
+        FILE_MAP_ALL_ACCESS,
+        FALSE,
+        MQ_FILE_MAPPING_NAME
+    );
+
+    if (!hMap) {
+        std::wcerr << L"[MQ Client] Не вдалося відкрити FileMapping\n";
+        return 1;
+    }
+
+    MQQueue* queue = (MQQueue*)MapViewOfFile(
+        hMap,
+        FILE_MAP_ALL_ACCESS,
+        0, 0,
+        sizeof(MQQueue)
+    );
+
+    if (!queue) {
+        std::wcerr << L"[MQ Client] Не вдалося змінити FileView\n";
+        return 1;
+    }
+
+    // 2. Відкриваємо м’ютекс
+    HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, MQ_MUTEX_NAME);
+
+    // 3. Відкриваємо семафор (показує наявність нових повідомлень)
+    HANDLE hSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, MQ_SEMAPHORE_NAME);
+
+    if (!hMutex || !hSem) {
+        std::wcerr << L"[MQ Client] IPC синхронізація не відкрита\n";
+        return 1;
+    }
+
+    std::wstring text;
+    while (true)
+    {
+        std::wcout << L"Введіть повідомлення (exit - вихід): ";
+        std::getline(std::wcin, text);
+
+        if (text == L"exit") break;
+
+        if (text.size() >= 256) {
+            std::wcout << L"Повідомлення надто довге!\n";
+            continue;
+        }
+
+        // Блокуємо чергу
+        WaitForSingleObject(hMutex, INFINITE);
+
+        // Перевіряємо чи є місце
+        if (queue->count == MQ_QUEUE_SIZE) {
+            std::wcout << L"[MQ Client] Черга переповнена!\n";
+            ReleaseMutex(hMutex);
+            continue;
+        }
+
+        // Записуємо повідомлення
+        MQMessage& msg = queue->messages[queue->tail];
+        wcsncpy_s(msg.text, text.c_str(), 255);
+
+        queue->tail = (queue->tail + 1) % MQ_QUEUE_SIZE;
+        queue->count++;
+
+        std::wcout << L"[MQ Client] Повідомлення додане в чергу\n";
+
+        ReleaseMutex(hMutex);
+
+        // Сигналізуємо logger, що повідомлення є
+        ReleaseSemaphore(hSem, 1, NULL);
+    }
+
+    UnmapViewOfFile(queue);
+    CloseHandle(hMap);
+    CloseHandle(hMutex);
+    CloseHandle(hSem);
+
+    return 0;
 }
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
