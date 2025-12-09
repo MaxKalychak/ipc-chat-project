@@ -41,8 +41,9 @@ struct ChatMessage
 // Тут ми зробимо QUEUE через FileMapping (кроспроцесна черга).
 // ============================================================
 
-#define MQ_FILE_MAPPING_NAME   L"Global\\ChatMessageQueue"
-#define MQ_MUTEX_NAME          L"Global\\ChatMQ_Mutex"
+#define MQ_FILE_MAPPING_NAME   L"Local\\ChatMessageQueue"
+#define MQ_MUTEX_NAME          L"Local\\ChatMQ_Mutex"
+#define MQ_SEMAPHORE_NAME      L"Local\\ChatMQ_Semaphore"
 #define MQ_QUEUE_SIZE          10  // кількість повідомлень у черзі
 
 struct MQSlot
@@ -85,5 +86,17 @@ struct MQSlot
 #define EXE_PIPE_CLIENT        L"client_pipe.exe"
 #define EXE_MQUEUE_CLIENT      L"client_mqueue.exe"
 #define EXE_LOGGER             L"logger_shm.exe"
+
+struct MQMessage {
+    wchar_t text[256];
+};
+
+struct MQQueue {
+    MQMessage messages[MQ_QUEUE_SIZE];
+    int head;
+    int tail;
+    int count;
+};
+
 
 #endif // COMMON_H

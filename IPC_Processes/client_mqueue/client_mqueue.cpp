@@ -1,10 +1,11 @@
 #include <iostream>
 #include <windows.h>
-#include "C:\Users\Max\source\repos\ipc-chat-project\Common\common.h"
+#include <string>
+#include "../../Common/common.h"
 
 int main()
 {
-    std::wcout << L"[MQ Client] Запуск клієнта message queue...\n";
+    std::wcout << L"[MQ Client] Launching the client message queue...\n";
 
     // 1. Відкриваємо file mapping для черги
     HANDLE hMap = OpenFileMapping(
@@ -14,7 +15,7 @@ int main()
     );
 
     if (!hMap) {
-        std::wcerr << L"[MQ Client] Не вдалося відкрити FileMapping\n";
+        std::wcerr << L"[MQ Client] Can't open FileMapping\n";
         return 1;
     }
 
@@ -26,7 +27,7 @@ int main()
     );
 
     if (!queue) {
-        std::wcerr << L"[MQ Client] Не вдалося змінити FileView\n";
+        std::wcerr << L"[MQ Client] Can't change FileView\n";
         return 1;
     }
 
@@ -37,20 +38,20 @@ int main()
     HANDLE hSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, MQ_SEMAPHORE_NAME);
 
     if (!hMutex || !hSem) {
-        std::wcerr << L"[MQ Client] IPC синхронізація не відкрита\n";
+        std::wcerr << L"[MQ Client] IPC synchronization is not open\n";
         return 1;
     }
 
     std::wstring text;
     while (true)
     {
-        std::wcout << L"Введіть повідомлення (exit - вихід): ";
+        std::wcout << L"Enter a message (exit - to end program): ";
         std::getline(std::wcin, text);
 
         if (text == L"exit") break;
 
         if (text.size() >= 256) {
-            std::wcout << L"Повідомлення надто довге!\n";
+            std::wcout << L"The message is too long!\n";
             continue;
         }
 
@@ -59,7 +60,7 @@ int main()
 
         // Перевіряємо чи є місце
         if (queue->count == MQ_QUEUE_SIZE) {
-            std::wcout << L"[MQ Client] Черга переповнена!\n";
+            std::wcout << L"[MQ Client] The queue is full!\n";
             ReleaseMutex(hMutex);
             continue;
         }
@@ -71,7 +72,7 @@ int main()
         queue->tail = (queue->tail + 1) % MQ_QUEUE_SIZE;
         queue->count++;
 
-        std::wcout << L"[MQ Client] Повідомлення додане в чергу\n";
+        std::wcout << L"[MQ Client] The message is added to the queue\n";
 
         ReleaseMutex(hMutex);
 
