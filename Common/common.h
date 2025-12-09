@@ -41,9 +41,9 @@ struct ChatMessage
 // Тут ми зробимо QUEUE через FileMapping (кроспроцесна черга).
 // ============================================================
 
-#define MQ_FILE_MAPPING_NAME   L"Local\\ChatMessageQueue"
-#define MQ_MUTEX_NAME          L"Local\\ChatMQ_Mutex"
-#define MQ_SEMAPHORE_NAME      L"Local\\ChatMQ_Semaphore"
+#define MQ_FILE_MAPPING_NAME   L"Local\\ChatMessageQueue" //
+#define MQ_MUTEX_NAME          L"Local\\ChatMQ_Mutex" //
+#define MQ_SEMAPHORE_NAME      L"Local\\ChatMQ_Semaphore" //
 #define MQ_QUEUE_SIZE          10  // кількість повідомлень у черзі
 
 struct MQSlot
