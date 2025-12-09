@@ -40,3 +40,4 @@
 # debug information files
 *.dwo
 .vs/
+/Tests/test_controller
