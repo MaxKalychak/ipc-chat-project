@@ -2,12 +2,14 @@
 
 #include <windows.h>
 #include <vcclr.h>
+#include "../../Common/common.h"   // тут ChatMessage, SHM_NAME, SHM_MUTEX_NAME, SHM_SEMAPHORE_NAME, SHM_SIZE
 
 namespace controller {
 
     using namespace System;
     using namespace System::Windows::Forms;
     using namespace System::Drawing;
+    using namespace System::Threading;
 
     public ref class MyForm : public Form
     {
@@ -15,17 +17,59 @@ namespace controller {
         MyForm()
         {
             InitializeComponent();
+
+            // початкові значення для SHM
+            hShm = nullptr;
+            hShmMutex = nullptr;
+            hShmSem = nullptr;
+            shmMessages = nullptr;
+            shmReadIndex = 0;
+            running = false;
+            shmThread = nullptr;
         }
 
-    protected:
         ~MyForm()
         {
+            // зупиняємо цикл читання
+            running = false;
+
+            // чекаємо потік (якщо він є)
+            if (shmThread != nullptr && shmThread->IsAlive)
+            {
+                shmThread->Join(200);
+            }
+
+            // звільняємо ресурси WinAPI
+            if (shmMessages)
+            {
+                UnmapViewOfFile(shmMessages);
+                shmMessages = nullptr;
+            }
+
+            if (hShm) { CloseHandle(hShm);       hShm = nullptr; }
+            if (hShmMutex) { CloseHandle(hShmMutex);  hShmMutex = nullptr; }
+            if (hShmSem) { CloseHandle(hShmSem);    hShmSem = nullptr; }
+
             if (components)
+            {
                 delete components;
+            }
         }
 
     private:
-        int selectedMethod = 0;
+        // ================== IPC поля ==================
+
+        HANDLE      hShm;
+        HANDLE      hShmMutex;
+        HANDLE      hShmSem;
+        ChatMessage* shmMessages;
+        int         shmReadIndex;
+        bool        running;
+        Thread^ shmThread;
+
+        // ================== UI поля ===================
+
+        int      selectedMethod;
 
         Label^ lblTitle;
         Button^ btnPipe;
@@ -39,6 +83,10 @@ namespace controller {
 
         System::ComponentModel::Container^ components;
 
+        // ============================================================
+        //                 ІНІЦІАЛІЗАЦІЯ ФОРМИ
+        // ============================================================
+
         void InitializeComponent(void)
         {
             this->StartPosition = FormStartPosition::CenterScreen;
@@ -47,14 +95,16 @@ namespace controller {
             this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::Sizable;
             this->MinimumSize = Drawing::Size(400, 600);
 
-            // ===== TITLE =====
+            selectedMethod = 0;
+
+            // ------- TITLE -------
             lblTitle = gcnew Label();
             lblTitle->Text = L"IPC Controller";
             lblTitle->Font = gcnew Drawing::Font(L"Segoe UI", 20);
             lblTitle->Location = Point(40, 10);
             lblTitle->Size = Drawing::Size(300, 40);
 
-            // ===== BUTTONS =====
+            // ------- BUTTONS -------
             btnPipe = gcnew Button();
             btnPipe->Text = L"Pipes / FIFO";
             btnPipe->Location = Point(40, 70);
@@ -79,39 +129,41 @@ namespace controller {
             btnStart->Size = Drawing::Size(260, 40);
             btnStart->Click += gcnew EventHandler(this, &MyForm::btnStart_Click);
 
-            // ===== SELECTED LABEL =====
+            // ------- SELECTED LABEL -------
             lblSelected = gcnew Label();
             lblSelected->Text = L"Selected: none";
             lblSelected->Location = Point(40, 290);
             lblSelected->Size = Drawing::Size(260, 20);
 
-            // ===== LOG BOX =====
+            // ------- LOG BOX -------
             txtLog = gcnew TextBox();
             txtLog->Location = Point(40, 320);
             txtLog->Size = Drawing::Size(260, 160);
             txtLog->Multiline = true;
             txtLog->ReadOnly = true;
             txtLog->ScrollBars = ScrollBars::Vertical;
+            txtLog->Anchor = AnchorStyles::Top | AnchorStyles::Left |
+                AnchorStyles::Right | AnchorStyles::Bottom;
 
-            // ===== INPUT TEXTBOX =====
+            // ------- INPUT TEXTBOX -------
             txtInput = gcnew TextBox();
             txtInput->Location = Point(40, 500);
             txtInput->Size = Drawing::Size(260, 30);
-            txtInput->Font = gcnew Drawing::Font("Segoe UI", 10);
-            txtInput->Text = "Type message...";
+            txtInput->Text = L"Type message...";
             txtInput->ForeColor = Drawing::Color::Gray;
+            txtInput->Anchor = AnchorStyles::Left | AnchorStyles::Right | AnchorStyles::Bottom;
             txtInput->Enter += gcnew EventHandler(this, &MyForm::txtInput_Enter);
             txtInput->Leave += gcnew EventHandler(this, &MyForm::txtInput_Leave);
 
-            // ===== SEND BUTTON =====
+            // ------- SEND BUTTON -------
             btnSend = gcnew Button();
-            btnSend->Text = "Send";
+            btnSend->Text = L"Send";
             btnSend->Location = Point(40, 540);
             btnSend->Size = Drawing::Size(260, 35);
-            btnSend->Font = gcnew Drawing::Font("Segoe UI", 11);
+            btnSend->Anchor = AnchorStyles::Left | AnchorStyles::Right | AnchorStyles::Bottom;
             btnSend->Click += gcnew EventHandler(this, &MyForm::btnSend_Click);
 
-            // ADD CONTROLS
+            // ------- ADD CONTROLS -------
             this->Controls->Add(lblTitle);
             this->Controls->Add(btnPipe);
             this->Controls->Add(btnMsg);
@@ -123,8 +175,20 @@ namespace controller {
             this->Controls->Add(btnSend);
         }
 
+        // ============================================================
+        //                      ДОПОМІЖНИЙ ЛОГЕР
+        // ============================================================
 
-        // ====== IPC selection ======
+    public:
+        void AddLog(String^ msg)
+        {
+            txtLog->AppendText(msg + "\r\n");
+        }
+
+    private:
+        // ============================================================
+        //                  ВИБІР МЕТОДУ IPC
+        // ============================================================
 
         void btnPipe_Click(Object^ sender, EventArgs^ e)
         {
@@ -144,28 +208,35 @@ namespace controller {
             lblSelected->Text = L"Selected: Shared Memory";
         }
 
-        // ====== Start processes ======
+        // ============================================================
+        //                    СТАРТ СИСТЕМИ
+        // ============================================================
 
         void btnStart_Click(Object^ sender, EventArgs^ e)
         {
             if (selectedMethod == 0)
             {
-                txtLog->AppendText("ERROR: Select method first!\r\n");
+                AddLog(L"ERROR: Select method first!");
                 return;
             }
 
+            // повні шляхи (ти вже їх налаштовувала — можна підправити)
             array<String^>^ procs = {
-                "client_pipe.exe",
-                "client_msg.exe",
-                "logger_shm.exe"
+                L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_pipe\\Debug\\client_pipe.exe",
+                L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_mqueue\\Debug\\client_mqueue.exe",
+                L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\logger_shm\\Debug\\logger.exe"
             };
 
-            for each(String ^ exe in procs)
-            {
-                String^ cmd = exe + " " + selectedMethod.ToString();
-                pin_ptr<const wchar_t> wcmd = PtrToStringChars(cmd);
+            String^ arg = " " + selectedMethod.ToString();
 
-                STARTUPINFO si = { sizeof(si) };
+            for each (String ^ exe in procs)
+            {
+                String^ fullCmd = exe + arg;
+                pin_ptr<const wchar_t> wcmd = PtrToStringChars(fullCmd);
+
+                STARTUPINFOW si;
+                ZeroMemory(&si, sizeof(si));
+                si.cb = sizeof(si);
                 PROCESS_INFORMATION pi;
 
                 BOOL ok = CreateProcessW(
@@ -179,39 +250,116 @@ namespace controller {
 
                 if (ok)
                 {
-                    txtLog->AppendText("Launched: " + exe + "\r\n");
+                    AddLog("Launched: " + exe);
                     CloseHandle(pi.hProcess);
                     CloseHandle(pi.hThread);
                 }
                 else
                 {
-                    txtLog->AppendText("FAILED: " + exe + "\r\n");
+                    AddLog("FAILED: " + exe);
                 }
             }
-        }
-        void btnSend_Click(Object^ sender, EventArgs^ e)
-        {
-            String^ message = txtInput->Text;
 
-            if (String::IsNullOrWhiteSpace(message))
+            // підключаємось до shared memory, mutex і semaphore,
+            // які створює logger (твій код вище)
+            InitSharedMemory();
+        }
+
+        // ============================================================
+        //               ПІДКЛЮЧЕННЯ ДО SHARED MEMORY
+        // ============================================================
+
+        void InitSharedMemory()
+        {
+            // кілька спроб — раптом logger ще не встиг створити об’єкти
+            AddLog("Connecting to shared memory...");
+
+            hShm = nullptr;
+            for (int i = 0; i < 10 && !hShm; ++i)
             {
-                txtLog->AppendText("Cannot send empty message.\r\n");
+                hShm = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, SHM_NAME);
+                if (!hShm) Thread::Sleep(200);
+            }
+
+            if (!hShm)
+            {
+                AddLog("ERROR: Cannot open SHM.");
                 return;
             }
 
-            // Додаємо у лог
-            txtLog->AppendText("[You]: " + message + "\r\n");
+            shmMessages = (ChatMessage*)MapViewOfFile(
+                hShm, FILE_MAP_ALL_ACCESS, 0, 0, SHM_SIZE
+            );
 
-            // Очищаємо поле вводу
-            txtInput->Clear();
+            if (!shmMessages)
+            {
+                AddLog("ERROR: MapViewOfFile(SHM) failed.");
+                CloseHandle(hShm); hShm = nullptr;
+                return;
+            }
+
+            // mutex + semaphore
+            hShmMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, SHM_MUTEX_NAME);
+            hShmSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE | SYNCHRONIZE,
+                FALSE, SHM_SEMAPHORE_NAME);
+
+            if (!hShmMutex || !hShmSem)
+            {
+                AddLog("ERROR: Cannot open SHM mutex or semaphore.");
+                return;
+            }
+
+            shmReadIndex = 0;
+            running = true;
+
+            // запускаємо керований потік, який буде читати з SHM
+            shmThread = gcnew Thread(gcnew ThreadStart(this, &MyForm::ShmReaderLoop));
+            shmThread->IsBackground = true;
+            shmThread->Start();
+
+            AddLog("Shared memory reader started.");
         }
+
+        // ============================================================
+        //            ЦИКЛ ЧИТАННЯ ПОВІДОМЛЕНЬ З SHM (ПОТІК)
+        // ============================================================
+
+        void ShmReaderLoop()
+        {
+            while (running)
+            {
+                // чекаємо, поки logger запише нове повідомлення
+                DWORD waitRes = WaitForSingleObject(hShmSem, INFINITE);
+                if (waitRes != WAIT_OBJECT_0)
+                    break;
+
+                WaitForSingleObject(hShmMutex, INFINITE);
+
+                ChatMessage msg = shmMessages[shmReadIndex];
+                shmReadIndex = (shmReadIndex + 1) % 10;
+
+                ReleaseMutex(hShmMutex);
+
+                String^ text = gcnew String(msg.text);
+
+                // безпечно оновлюємо UI з іншого потоку
+                this->BeginInvoke(
+                    gcnew Action<String^>(this, &MyForm::AddLog),
+                    text
+                );
+            }
+        }
+
+        // ============================================================
+        //                ОБРОБКА ПОЛЯ ВВОДУ ТА КНОПКИ SEND
+        // ============================================================
 
         void txtInput_Enter(Object^ sender, EventArgs^ e)
         {
-            if (txtInput->Text == "Type message...")
+            if (txtInput->Text == L"Type message...")
             {
                 txtInput->Text = "";
-                txtInput->ForeColor = System::Drawing::Color::Black;
+                txtInput->ForeColor = Drawing::Color::Black;
             }
         }
 
@@ -219,10 +367,27 @@ namespace controller {
         {
             if (String::IsNullOrWhiteSpace(txtInput->Text))
             {
-                txtInput->Text = "Type message...";
-                txtInput->ForeColor = System::Drawing::Color::Gray;
+                txtInput->Text = L"Type message...";
+                txtInput->ForeColor = Drawing::Color::Gray;
             }
         }
 
+        void btnSend_Click(Object^ sender, EventArgs^ e)
+        {
+            String^ msg = txtInput->Text;
+
+            if (String::IsNullOrWhiteSpace(msg) || msg == L"Type message...")
+            {
+                AddLog("Cannot send empty message.");
+                return;
+            }
+
+            AddLog("[You]: " + msg);
+            txtInput->Clear();
+
+            // тут можна буде додати логіку,
+            // щоб відправляти повідомлення в Message Queue / Pipes,
+            // коли код інших учасників буде готовий
+        }
     };
 }
