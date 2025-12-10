@@ -41,17 +41,22 @@ namespace controller {
 
         void InitializeComponent(void)
         {
+            // ===== FORM SETTINGS =====
+            this->StartPosition = FormStartPosition::CenterScreen;
             this->Text = L"IPC Controller";
-            this->ClientSize = Drawing::Size(360, 520);
-            this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
-            this->MaximizeBox = false;
+            this->ClientSize = Drawing::Size(360, 600);
+            this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::SizableToolWindow;
+            this->MaximizeBox = true;
+            this->MinimumSize = Drawing::Size(400, 600);
 
+            // ===== TITLE =====
             lblTitle = gcnew Label();
             lblTitle->Text = L"IPC Controller";
             lblTitle->Font = gcnew Drawing::Font(L"Segoe UI", 20);
             lblTitle->Location = Point(40, 10);
             lblTitle->Size = Drawing::Size(300, 40);
 
+            // ===== BUTTONS =====
             btnPipe = gcnew Button();
             btnPipe->Text = L"Pipes / FIFO";
             btnPipe->Location = Point(40, 70);
@@ -76,34 +81,43 @@ namespace controller {
             btnStart->Size = Drawing::Size(260, 40);
             btnStart->Click += gcnew EventHandler(this, &MyForm::btnStart_Click);
 
+            // ===== SELECTED LABEL =====
             lblSelected = gcnew Label();
             lblSelected->Text = L"Selected: none";
             lblSelected->Location = Point(40, 290);
             lblSelected->Size = Drawing::Size(260, 20);
 
+            // ===== LOG BOX =====
             txtLog = gcnew TextBox();
             txtLog->Location = Point(40, 320);
             txtLog->Size = Drawing::Size(260, 160);
             txtLog->Multiline = true;
             txtLog->ReadOnly = true;
             txtLog->ScrollBars = ScrollBars::Vertical;
+            txtLog->Anchor = AnchorStyles::Top | AnchorStyles::Left |
+                AnchorStyles::Right | AnchorStyles::Bottom;
 
             // ===== INPUT TEXTBOX =====
             txtInput = gcnew TextBox();
             txtInput->Location = Point(40, 500);
             txtInput->Size = Drawing::Size(260, 30);
             txtInput->Font = gcnew Drawing::Font("Segoe UI", 10);
-            txtInput->PlaceholderText = L"Type message...";
+            txtInput->Text = "Type message...";
+            txtInput->ForeColor = Drawing::Color::Gray;
+            txtInput->Anchor = AnchorStyles::Left | AnchorStyles::Right | AnchorStyles::Bottom;
+            txtInput->Enter += gcnew EventHandler(this, &MyForm::txtInput_Enter);
+            txtInput->Leave += gcnew EventHandler(this, &MyForm::txtInput_Leave);
 
             // ===== SEND BUTTON =====
             btnSend = gcnew Button();
-            btnSend->Text = L"Send";
+            btnSend->Text = "Send";
             btnSend->Location = Point(40, 540);
             btnSend->Size = Drawing::Size(260, 35);
             btnSend->Font = gcnew Drawing::Font("Segoe UI", 11);
+            btnSend->Anchor = AnchorStyles::Left | AnchorStyles::Right | AnchorStyles::Bottom;
             btnSend->Click += gcnew EventHandler(this, &MyForm::btnSend_Click);
 
-
+            // ===== ADD COMPONENTS =====
             this->Controls->Add(lblTitle);
             this->Controls->Add(btnPipe);
             this->Controls->Add(btnMsg);
@@ -113,8 +127,8 @@ namespace controller {
             this->Controls->Add(txtLog);
             this->Controls->Add(txtInput);
             this->Controls->Add(btnSend);
-
         }
+
 
         // ====== IPC selection ======
 
@@ -196,6 +210,24 @@ namespace controller {
 
             // Очищаємо поле вводу
             txtInput->Clear();
+        }
+
+        void txtInput_Enter(Object^ sender, EventArgs^ e)
+        {
+            if (txtInput->Text == "Type message...")
+            {
+                txtInput->Text = "";
+                txtInput->ForeColor = System::Drawing::Color::Black;
+            }
+        }
+
+        void txtInput_Leave(Object^ sender, EventArgs^ e)
+        {
+            if (String::IsNullOrWhiteSpace(txtInput->Text))
+            {
+                txtInput->Text = "Type message...";
+                txtInput->ForeColor = System::Drawing::Color::Gray;
+            }
         }
 
     };
