@@ -34,6 +34,8 @@ namespace controller {
         Button^ btnStart;
         Label^ lblSelected;
         TextBox^ txtLog;
+        TextBox^ txtInput;
+        Button^ btnSend;
 
         System::ComponentModel::Container^ components;
 
