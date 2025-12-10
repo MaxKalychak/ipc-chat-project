@@ -1,85 +1,131 @@
 #include <windows.h>
-#include <string>
 #include <iostream>
+#include <string>
 #include <vector>
+#include "../../Common/common.h"
 
-void PrintMenu()
+void LaunchProcess(const std::wstring& path, const std::wstring& args, const std::wstring& title)
 {
-    std::cout << "=== IPC CONTROLLER ===\n";
-    std::cout << "Виберіть метод IPC:\n";
-    std::cout << "1 — Pipes/FIFO\n";
-    std::cout << "2 — Message Queue\n";
-    std::cout << "3 — Shared Memory + Semaphores\n";
-    std::cout << "Ваш вибір: ";
+    std::wstring cmd = path + L" " + args;
+
+    std::vector<wchar_t> buffer(cmd.begin(), cmd.end());
+    buffer.push_back(L'\0');
+
+    STARTUPINFOW si{};
+    PROCESS_INFORMATION pi{};
+    si.cb = sizeof(si);
+
+    BOOL ok = CreateProcessW(
+        nullptr,
+        buffer.data(),
+        nullptr, nullptr,
+        FALSE,
+        CREATE_NEW_CONSOLE,   // <<< КОЖЕН ПРОЦЕС У НОВІЙ КОНСОЛІ
+        nullptr, nullptr,
+        &si, &pi
+    );
+
+    if (!ok)
+    {
+        std::wcout << L"[CONTROLLER] ERROR: Failed to launch " << title
+            << L" | Error = " << GetLastError() << L"\n";
+        return;
+    }
+
+    std::wcout << L"[CONTROLLER] Launched: " << title << L"\n";
+
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
 }
 
 int main()
 {
-    int method = 0;
-    PrintMenu();
-    std::cin >> method;
+    std::wcout << L"=== IPC CONTROLLER ===\n";
+    std::wcout << L"Initializing Message Queue...\n";
 
-    if (method < 1 || method > 3)
+    // ====================================================
+    // 1. Create Message Queue (FileMapping + Mutex + Semaphores)
+    // ====================================================
+
+    HANDLE hMap = CreateFileMappingW(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_READWRITE,
+        0,
+        sizeof(MQQueue),
+        MQ_FILE_MAPPING_NAME
+    );
+
+    if (!hMap)
     {
-        std::cout << "Невірний вибір.\n";
+        std::wcerr << L"[CONTROLLER] ERROR: CreateFileMapping failed. Code = " << GetLastError() << L"\n";
+        return 1;
+    }
+    std::wcout << L"[CONTROLLER] FileMapping OK\n";
+
+    MQQueue* queue = (MQQueue*)MapViewOfFile(
+        hMap,
+        FILE_MAP_ALL_ACCESS,
+        0, 0,
+        sizeof(MQQueue)
+    );
+
+    if (!queue)
+    {
+        std::wcerr << L"[CONTROLLER] ERROR: MapViewOfFile failed. Code = " << GetLastError() << L"\n";
         return 1;
     }
 
-    // Формуємо аргумент
-    std::wstring arg = L" ";
-    arg += std::to_wstring(method);
+    queue->head = 0;
+    queue->tail = 0;
+    queue->count = 0;
 
-    // ПОВНІ ШЛЯХИ ДО EXE
-    std::wstring modules[3] =
+    std::wcout << L"[CONTROLLER] Queue initialized\n";
+
+    HANDLE hMutex = CreateMutexW(NULL, FALSE, MQ_MUTEX_NAME);
+    if (!hMutex)
     {
-        L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_pipe\\Debug\\client_pipe.exe",
-        L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_mqueue\\Debug\\client_mqueue.exe",
-        L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\logger_shm\\Debug\\logger.exe"
-    };
-
-    PROCESS_INFORMATION pi[3];
-    STARTUPINFOW si[3];
-
-    ZeroMemory(pi, sizeof(pi));
-    ZeroMemory(si, sizeof(si));
-
-    for (int i = 0; i < 3; i++)
-    {
-        si[i].cb = sizeof(STARTUPINFOW);
-
-        // Команда = повний шлях + параметр
-        std::wstring cmd = modules[i] + arg;
-
-        // Перетворюємо у LPWSTR
-        std::vector<wchar_t> buffer(cmd.begin(), cmd.end());
-        buffer.push_back(L'\0');
-
-        BOOL ok = CreateProcessW(
-            nullptr,
-            buffer.data(),
-            nullptr, nullptr,
-            FALSE,
-            0, nullptr, nullptr,
-            &si[i], &pi[i]
-        );
-
-        if (!ok)
-        {
-            std::wcout << L"FAILED: " << modules[i] << L"\n";
-            continue;
-        }
-
-        std::wcout << L"Launched: " << modules[i] << L"\n";
+        std::wcerr << L"[CONTROLLER] ERROR: CreateMutex failed. Code = " << GetLastError() << L"\n";
+        return 1;
     }
+    std::wcout << L"[CONTROLLER] Mutex OK\n";
 
-    // Очікування завершення процесів
-    for (int i = 0; i < 3; i++)
+    HANDLE hSem = CreateSemaphoreW(NULL, 0, MQ_QUEUE_SIZE, MQ_SEMAPHORE_NAME);
+    if (!hSem)
     {
-        WaitForSingleObject(pi[i].hProcess, INFINITE);
-        CloseHandle(pi[i].hProcess);
-        CloseHandle(pi[i].hThread);
+        std::wcerr << L"[CONTROLLER] ERROR: CreateSemaphore failed. Code = " << GetLastError() << L"\n";
+        return 1;
     }
+    std::wcout << L"[CONTROLLER] Semaphore OK\n";
 
-    std::cout << "\nУсі процеси завершили роботу.\n";
+
+    // ====================================================
+    // 2. Launch logger + mqueue client as separate consoles
+    // ====================================================
+
+    std::wcout << L"\nLaunching modules (mqueue + logger)...\n";
+
+    // ВІДНОСНІ ШЛЯХИ (відносно controller.exe)
+    std::wstring loggerPath = L"..\\..\\..\\logger_shm\\x64\\Debug\\logger_shm.exe";
+    std::wstring mqueuePath = L"..\\..\\..\\client_mqueue\\x64\\Debug\\client_mqueue.exe";
+
+    LaunchProcess(loggerPath, L"", L"logger_shm.exe");
+    LaunchProcess(mqueuePath, L"", L"client_mqueue.exe");
+
+
+    // ====================================================
+    // 3. Controller "lives" until user closes it manually
+    // ====================================================
+    std::wcout << L"\nAll modules launched. Controller is now waiting...\n";
+    std::wcout << L"Press ENTER to exit controller.\n";
+    std::wcin.get();
+    std::wcin.get(); // fixes skip issue
+
+    UnmapViewOfFile(queue);
+    CloseHandle(hMap);
+    CloseHandle(hMutex);
+    CloseHandle(hSem);
+
+    std::wcout << L"Controller finished.\n";
     return 0;
 }
