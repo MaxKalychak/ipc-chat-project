@@ -20,7 +20,7 @@ void LaunchProcess(const std::wstring& path, const std::wstring& args, const std
         buffer.data(),
         nullptr, nullptr,
         FALSE,
-        CREATE_NEW_CONSOLE,   // <<< КОЖЕН ПРОЦЕС У НОВІЙ КОНСОЛІ
+        CREATE_NEW_CONSOLE,   // запуск у новій консолі
         nullptr, nullptr,
         &si, &pi
     );
@@ -44,7 +44,7 @@ int main()
     std::wcout << L"Initializing Message Queue...\n";
 
     // ====================================================
-    // 1. Create Message Queue (FileMapping + Mutex + Semaphores)
+    // 1. Create MQ (FileMapping + Mutex + Semaphores)
     // ====================================================
 
     HANDLE hMap = CreateFileMappingW(
@@ -100,26 +100,29 @@ int main()
 
 
     // ====================================================
-    // 2. Launch logger + mqueue client as separate consoles
+    // 2. Launch logger + mqueue client + pipe client
     // ====================================================
 
-    std::wcout << L"\nLaunching modules (mqueue + logger)...\n";
+    std::wcout << L"\nLaunching modules (pipe + mqueue + logger)...\n";
 
-    // ВІДНОСНІ ШЛЯХИ (відносно controller.exe)
+    // Відносні шляхи (відносно controller.exe)
     std::wstring loggerPath = L"..\\..\\logger_shm\\Debug\\logger_shm.exe";
     std::wstring mqueuePath = L"..\\..\\client_mqueue\\Debug\\client_mqueue.exe";
+    std::wstring pipePath = L"..\\..\\client_pipe\\Debug\\client_pipe.exe";
 
     LaunchProcess(loggerPath, L"", L"logger_shm.exe");
     LaunchProcess(mqueuePath, L"", L"client_mqueue.exe");
+    LaunchProcess(pipePath, L"", L"client_pipe.exe");
 
 
     // ====================================================
-    // 3. Controller "lives" until user closes it manually
+    // 3. Controller "lives" until user presses ENTER
     // ====================================================
     std::wcout << L"\nAll modules launched. Controller is now waiting...\n";
     std::wcout << L"Press ENTER to exit controller.\n";
+
     std::wcin.get();
-    std::wcin.get(); // fixes skip issue
+    std::wcin.get(); // щоб коректно пропустити символ
 
     UnmapViewOfFile(queue);
     CloseHandle(hMap);
