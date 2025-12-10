@@ -88,6 +88,22 @@ namespace controller {
             txtLog->ReadOnly = true;
             txtLog->ScrollBars = ScrollBars::Vertical;
 
+            // ===== INPUT TEXTBOX =====
+            txtInput = gcnew TextBox();
+            txtInput->Location = Point(40, 500);
+            txtInput->Size = Drawing::Size(260, 30);
+            txtInput->Font = gcnew Drawing::Font("Segoe UI", 10);
+            txtInput->PlaceholderText = L"Type message...";
+
+            // ===== SEND BUTTON =====
+            btnSend = gcnew Button();
+            btnSend->Text = L"Send";
+            btnSend->Location = Point(40, 540);
+            btnSend->Size = Drawing::Size(260, 35);
+            btnSend->Font = gcnew Drawing::Font("Segoe UI", 11);
+            btnSend->Click += gcnew EventHandler(this, &MyForm::btnSend_Click);
+
+
             this->Controls->Add(lblTitle);
             this->Controls->Add(btnPipe);
             this->Controls->Add(btnMsg);
@@ -95,6 +111,9 @@ namespace controller {
             this->Controls->Add(btnStart);
             this->Controls->Add(lblSelected);
             this->Controls->Add(txtLog);
+            this->Controls->Add(txtInput);
+            this->Controls->Add(btnSend);
+
         }
 
         // ====== IPC selection ======
@@ -162,5 +181,22 @@ namespace controller {
                 }
             }
         }
+        void btnSend_Click(Object^ sender, EventArgs^ e)
+        {
+            String^ message = txtInput->Text;
+
+            if (String::IsNullOrWhiteSpace(message))
+            {
+                txtLog->AppendText("Cannot send empty message.\r\n");
+                return;
+            }
+
+            // Додаємо у лог
+            txtLog->AppendText("[You]: " + message + "\r\n");
+
+            // Очищаємо поле вводу
+            txtInput->Clear();
+        }
+
     };
 }
