@@ -59,11 +59,12 @@ struct MQSlot
 // Логер і клієнти спільно використовують сегмент пам’яті.
 // ============================================================
 
-#define SHM_NAME               L"Global\\ChatSharedMemory"
-#define SHM_SIZE               (sizeof(ChatMessage) * 10)  // буфер для 10 повідомлень
+#define SHM_NAME               L"Local\\ChatSharedMemory"
+#define SHM_SIZE               (sizeof(ChatMessage) * 10)
 
-#define SHM_SEMAPHORE_NAME    L"Global\\ChatSHM_Sem"
-#define SHM_MUTEX_NAME        L"Global\\ChatSHM_Mutex"
+#define SHM_SEMAPHORE_NAME     L"Local\\ChatSHM_Sem"
+#define SHM_MUTEX_NAME         L"Local\\ChatSHM_Mutex"
+
 
 // ============================================================
 //                   ІДЕНТИФІКАТОРИ ПРОЦЕСІВ

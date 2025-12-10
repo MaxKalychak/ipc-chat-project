@@ -1,80 +1,84 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include <iostream>
+#include <string>
+#include "../../Common/common.h"
 
-#define PIPE_C2S L"\\\\.\\pipe\\chat_pipe_c2s" // client -> server
-#define PIPE_S2C L"\\\\.\\pipe\\chat_pipe_s2c" // server -> client
-
-int main()
+int wmain()
 {
-    std::wcout << L"[PIPE SERVER] Starting...\n";
+    std::wcout << L"[PIPE Client] Launching client_pipe...\n";
 
-    // ---------- CREATE PIPE: client -> server ----------
-    HANDLE pipeC2S = CreateNamedPipeW(
-        PIPE_C2S,
-        PIPE_ACCESS_INBOUND,
-        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
-        1, 512, 512, 0, nullptr
-    );
+    // ============================
+    // Підключення до пайпа logger'а
+    // ============================
+    std::wcout << L"[PIPE Client] Waiting for pipe...\n";
 
-    if (pipeC2S == INVALID_HANDLE_VALUE)
+    if (!WaitNamedPipeW(PIPE_CLIENT_TO_LOGGER, NMPWAIT_WAIT_FOREVER))
     {
-        std::wcerr << L"[SERVER] Error creating C2S pipe: " << GetLastError() << L"\n";
+        std::wcerr << L"[PIPE Client] ERROR: WaitNamedPipe failed, code = "
+            << GetLastError() << L"\n";
         return 1;
     }
 
-    std::wcout << L"[SERVER] Waiting for client (C2S)...\n";
-    ConnectNamedPipe(pipeC2S, nullptr);
-
-    std::wcout << L"[SERVER] Client connected to C2S pipe.\n";
-
-    // ---------- CREATE PIPE: server -> client ----------
-    HANDLE pipeS2C = CreateNamedPipeW(
-        PIPE_S2C,
-        PIPE_ACCESS_OUTBOUND,
-        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
-        1, 512, 512, 0, nullptr
+    HANDLE hPipe = CreateFileW(
+        PIPE_CLIENT_TO_LOGGER,
+        GENERIC_WRITE,      // Pipe → тільки запис
+        0,
+        nullptr,
+        OPEN_EXISTING,
+        0,
+        nullptr
     );
 
-    if (pipeS2C == INVALID_HANDLE_VALUE)
+    if (hPipe == INVALID_HANDLE_VALUE)
     {
-        std::wcerr << L"[SERVER] Error creating S2C pipe: " << GetLastError() << L"\n";
+        std::wcerr << L"[PIPE Client] ERROR: Cannot connect to pipe. Code = "
+            << GetLastError() << L"\n";
         return 1;
     }
 
-    std::wcout << L"[SERVER] Waiting for client (S2C)...\n";
-    ConnectNamedPipe(pipeS2C, nullptr);
+    std::wcout << L"[PIPE Client] Connected to logger pipe.\n";
 
-    std::wcout << L"[SERVER] Client connected to S2C pipe.\n";
-
-    // ---------- MAIN LOOP ----------
-    wchar_t buffer[256];
-
+    // =====================
+    // ОСНОВНИЙ ЦИКЛ
+    // =====================
     while (true)
     {
-        DWORD read = 0;
-        BOOL ok = ReadFile(pipeC2S, buffer, sizeof(buffer), &read, nullptr);
+        std::wstring text;
+        std::wcout << L"Enter message (exit to quit): ";
+        std::getline(std::wcin, text);
 
-        if (!ok || read == 0)
+        if (text == L"exit")
+            break;
+
+        if (text.empty())
+            continue;
+
+        // Формуємо ChatMessage
+        ChatMessage msg{};
+        msg.senderId = CLIENT_PIPE_ID;
+        wcsncpy_s(msg.text, text.c_str(), MAX_TEXT - 1);
+
+        DWORD bytesWritten = 0;
+
+        BOOL ok = WriteFile(
+            hPipe,
+            &msg,
+            sizeof(msg),
+            &bytesWritten,
+            nullptr
+        );
+
+        if (!ok)
         {
-            std::wcout << L"[SERVER] Client disconnected.\n";
+            std::wcerr << L"[PIPE Client] WriteFile failed. Code = "
+                << GetLastError() << L"\n";
             break;
         }
 
-        buffer[read / sizeof(wchar_t)] = L'\0';
-
-        std::wcout << L"[SERVER RECEIVED]: " << buffer << L"\n";
-
-        // Відправляємо відповідь клієнту
-        std::wstring reply = L"Server received: ";
-        reply += buffer;
-
-        DWORD written = 0;
-        WriteFile(pipeS2C, reply.c_str(),
-            (reply.size() + 1) * sizeof(wchar_t), &written, nullptr);
+        std::wcout << L"[PIPE Client] Message sent.\n";
     }
 
-    CloseHandle(pipeC2S);
-    CloseHandle(pipeS2C);
-
+    CloseHandle(hPipe);
+    std::wcout << L"[PIPE Client] Exiting.\n";
     return 0;
 }

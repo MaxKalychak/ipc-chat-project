@@ -106,8 +106,8 @@ int main()
     std::wcout << L"\nLaunching modules (mqueue + logger)...\n";
 
     // ВІДНОСНІ ШЛЯХИ (відносно controller.exe)
-    std::wstring loggerPath = L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\logger_shm\\Debug\\logger_shm.exe";
-    std::wstring mqueuePath = L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_mqueue\\Debug\\client_mqueue.exe";
+    std::wstring loggerPath = L"..\\..\\logger_shm\\Debug\\logger_shm.exe";
+    std::wstring mqueuePath = L"..\\..\\client_mqueue\\Debug\\client_mqueue.exe";
 
     LaunchProcess(loggerPath, L"", L"logger_shm.exe");
     LaunchProcess(mqueuePath, L"", L"client_mqueue.exe");
