@@ -41,12 +41,10 @@ namespace controller {
 
         void InitializeComponent(void)
         {
-            // ===== FORM SETTINGS =====
             this->StartPosition = FormStartPosition::CenterScreen;
             this->Text = L"IPC Controller";
             this->ClientSize = Drawing::Size(360, 600);
-            this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::SizableToolWindow;
-            this->MaximizeBox = true;
+            this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::Sizable;
             this->MinimumSize = Drawing::Size(400, 600);
 
             // ===== TITLE =====
@@ -94,8 +92,6 @@ namespace controller {
             txtLog->Multiline = true;
             txtLog->ReadOnly = true;
             txtLog->ScrollBars = ScrollBars::Vertical;
-            txtLog->Anchor = AnchorStyles::Top | AnchorStyles::Left |
-                AnchorStyles::Right | AnchorStyles::Bottom;
 
             // ===== INPUT TEXTBOX =====
             txtInput = gcnew TextBox();
@@ -104,7 +100,6 @@ namespace controller {
             txtInput->Font = gcnew Drawing::Font("Segoe UI", 10);
             txtInput->Text = "Type message...";
             txtInput->ForeColor = Drawing::Color::Gray;
-            txtInput->Anchor = AnchorStyles::Left | AnchorStyles::Right | AnchorStyles::Bottom;
             txtInput->Enter += gcnew EventHandler(this, &MyForm::txtInput_Enter);
             txtInput->Leave += gcnew EventHandler(this, &MyForm::txtInput_Leave);
 
@@ -114,10 +109,9 @@ namespace controller {
             btnSend->Location = Point(40, 540);
             btnSend->Size = Drawing::Size(260, 35);
             btnSend->Font = gcnew Drawing::Font("Segoe UI", 11);
-            btnSend->Anchor = AnchorStyles::Left | AnchorStyles::Right | AnchorStyles::Bottom;
             btnSend->Click += gcnew EventHandler(this, &MyForm::btnSend_Click);
 
-            // ===== ADD COMPONENTS =====
+            // ADD CONTROLS
             this->Controls->Add(lblTitle);
             this->Controls->Add(btnPipe);
             this->Controls->Add(btnMsg);
@@ -163,7 +157,7 @@ namespace controller {
             array<String^>^ procs = {
                 "client_pipe.exe",
                 "client_msg.exe",
-                "logger.exe"
+                "logger_shm.exe"
             };
 
             for each(String ^ exe in procs)

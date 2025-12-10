@@ -1,9 +1,7 @@
-// controller.cpp
-// Учасник 1 — головний процес контролер IPC
-
 #include <windows.h>
 #include <string>
 #include <iostream>
+#include <vector>
 
 void PrintMenu()
 {
@@ -27,16 +25,16 @@ int main()
         return 1;
     }
 
-    // --- формуємо аргумент для процесів ---
+    // Формуємо аргумент
     std::wstring arg = L" ";
     arg += std::to_wstring(method);
 
-    // --- список дочірніх модулів ---
-    const wchar_t* modules[3] =
+    // ПОВНІ ШЛЯХИ ДО EXE
+    std::wstring modules[3] =
     {
-        L"client_pipe.exe",     // Учасник 2
-        L"client_msg.exe",      // Учасник 3
-        L"logger.exe"           // Учасник 4
+        L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_pipe\\Debug\\client_pipe.exe",
+        L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\client_mqueue\\Debug\\client_mqueue.exe",
+        L"C:\\Users\\Admin\\Desktop\\ipc-chat-project\\IPC_Processes\\logger_shm\\Debug\\logger.exe"
     };
 
     PROCESS_INFORMATION pi[3];
@@ -45,17 +43,20 @@ int main()
     ZeroMemory(pi, sizeof(pi));
     ZeroMemory(si, sizeof(si));
 
-    // --- запуск процесів ---
     for (int i = 0; i < 3; i++)
     {
         si[i].cb = sizeof(STARTUPINFOW);
 
-        std::wstring cmd = modules[i];
-        cmd += arg;    // додаємо IPC метод (1/2/3)
+        // Команда = повний шлях + параметр
+        std::wstring cmd = modules[i] + arg;
+
+        // Перетворюємо у LPWSTR
+        std::vector<wchar_t> buffer(cmd.begin(), cmd.end());
+        buffer.push_back(L'\0');
 
         BOOL ok = CreateProcessW(
             nullptr,
-            cmd.data(),   // команда разом з параметром
+            buffer.data(),
             nullptr, nullptr,
             FALSE,
             0, nullptr, nullptr,
@@ -64,23 +65,17 @@ int main()
 
         if (!ok)
         {
-            std::cout << "Помилка запуску " << i + 1 << " процесу.\n";
-            return 1;
+            std::wcout << L"FAILED: " << modules[i] << L"\n";
+            continue;
         }
 
-        std::cout << "Запущено процес: " << i + 1 << "\n";
+        std::wcout << L"Launched: " << modules[i] << L"\n";
     }
 
-    // --- очікування завершення клієнтів ---
-    WaitForSingleObject(pi[0].hProcess, INFINITE);
-    WaitForSingleObject(pi[1].hProcess, INFINITE);
-
-    // --- logger завершується останнім ---
-    WaitForSingleObject(pi[2].hProcess, INFINITE);
-
-    // --- очищення ---
+    // Очікування завершення процесів
     for (int i = 0; i < 3; i++)
     {
+        WaitForSingleObject(pi[i].hProcess, INFINITE);
         CloseHandle(pi[i].hProcess);
         CloseHandle(pi[i].hThread);
     }
