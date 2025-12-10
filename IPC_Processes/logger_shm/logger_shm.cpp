@@ -2,126 +2,157 @@
 #include <iostream>
 #include "../../Common/common.h"
 
+// ======================= PIPE THREAD =======================
+
+DWORD WINAPI PipeReaderThread(LPVOID param)
+{
+    HANDLE hPipe = (HANDLE)param;
+
+    std::wcout << L"[LOGGER PIPE] Waiting for PIPE client...\n";
+
+    if (!ConnectNamedPipe(hPipe, NULL))
+    {
+        if (GetLastError() != ERROR_PIPE_CONNECTED)
+        {
+            std::wcerr << L"[LOGGER PIPE] ConnectNamedPipe failed. Code = "
+                << GetLastError() << L"\n";
+            return 1;
+        }
+    }
+
+    std::wcout << L"[LOGGER PIPE] Client connected.\n";
+
+    ChatMessage msg;
+
+    while (true)
+    {
+        DWORD bytesRead = 0;
+        BOOL ok = ReadFile(hPipe, &msg, sizeof(msg), &bytesRead, NULL);
+
+        if (!ok || bytesRead == 0)
+        {
+            std::wcout << L"[LOGGER PIPE] Client disconnected.\n";
+            break;
+        }
+
+        // -------------------------------
+        // Запис у SHM
+        // -------------------------------
+        HANDLE hShm = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, SHM_NAME);
+        if (!hShm) continue;
+
+        ChatMessage* shm = (ChatMessage*)MapViewOfFile(
+            hShm, FILE_MAP_ALL_ACCESS, 0, 0, SHM_SIZE
+        );
+        if (!shm) continue;
+
+        HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, SHM_MUTEX_NAME);
+        HANDLE hSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, SHM_SEMAPHORE_NAME);
+
+        static int idx = 0;
+
+        WaitForSingleObject(hMutex, INFINITE);
+
+        shm[idx] = msg;
+        idx = (idx + 1) % 10;
+
+        ReleaseMutex(hMutex);
+        ReleaseSemaphore(hSem, 1, NULL);
+
+        UnmapViewOfFile(shm);
+
+        std::wcout << L"[LOGGER PIPE] Received (PIPE): " << msg.text << L"\n";
+    }
+
+    return 0;
+}
+
+// ============================= MAIN LOGGER =============================
+
 int main()
 {
     std::wcout << L"[LOGGER] Launch of logger...\n";
 
-    // ================================
-    // 1. Відкриваємо FileMapping черги
-    // ================================
-    HANDLE hMap = OpenFileMapping(
-        FILE_MAP_ALL_ACCESS,
-        FALSE,
-        MQ_FILE_MAPPING_NAME
-    );
+    // ---------------- MQ ----------------
+    HANDLE hMap = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, MQ_FILE_MAPPING_NAME);
+    if (!hMap) { std::wcerr << L"[LOGGER] ERROR MQ FileMapping\n"; return 1; }
 
-    if (!hMap)
-    {
-        std::wcerr << L"[LOGGER] ERROR: Can't open MessageQueue FileMapping\n";
-        return 1;
-    }
+    MQQueue* queue = (MQQueue*)MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MQQueue));
+    if (!queue) { std::wcerr << L"[LOGGER] ERROR MQ MapViewOfFile\n"; return 1; }
 
-    MQQueue* queue = (MQQueue*)MapViewOfFile(
-        hMap, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MQQueue)
-    );
-
-    if (!queue)
-    {
-        std::wcerr << L"[LOGGER] ERROR: MapViewOfFile\n";
-        return 1;
-    }
-
-    // Відкриваємо Mutex черги
     HANDLE hQueueMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, MQ_MUTEX_NAME);
+    HANDLE hQueueSem = OpenSemaphore(SYNCHRONIZE | SEMAPHORE_MODIFY_STATE, FALSE, MQ_SEMAPHORE_NAME);
 
-    // Відкриваємо Semaphore черги (сигнал від клієнтів)
-    HANDLE hQueueSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE | SYNCHRONIZE, FALSE, MQ_SEMAPHORE_NAME);
+    // ---------------- SHM ----------------
+    HANDLE hShm = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, SHM_SIZE, SHM_NAME);
+    if (!hShm) { std::wcerr << L"[LOGGER] ERROR CreateFileMapping(SHM)\n"; return 1; }
 
-    if (!hQueueMutex || !hQueueSem)
-    {
-        std::wcerr << L"[LOGGER] ERROR: Can't open Mutex or Semaphore for a queue\n";
-        return 1;
-    }
+    ChatMessage* shmMessages = (ChatMessage*)MapViewOfFile(hShm, FILE_MAP_ALL_ACCESS, 0, 0, SHM_SIZE);
+    if (!shmMessages) { std::wcerr << L"[LOGGER] ERROR MapViewOfFile(SHM)\n"; return 1; }
 
-    // ===========================================
-    // 2. Створюємо SharedMemory для WinForms UI
-    // ===========================================
-    HANDLE hShm = CreateFileMapping(
-        INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
-        0, SHM_SIZE, SHM_NAME
-    );
-
-    if (!hShm)
-    {
-        std::wcerr << L"[LOGGER] ERROR: CreateFileMapping(SHM)\n";
-        return 1;
-    }
-
-    ChatMessage* shmMessages = (ChatMessage*)MapViewOfFile(
-        hShm, FILE_MAP_ALL_ACCESS, 0, 0, SHM_SIZE
-    );
-
-    if (!shmMessages)
-    {
-        std::wcerr << L"[LOGGER] ERROR: MapViewOfFile(SHM)\n";
-        return 1;
-    }
-
-    // Створюємо синхронізацію UI
     HANDLE hShmMutex = CreateMutex(NULL, FALSE, SHM_MUTEX_NAME);
     HANDLE hShmSem = CreateSemaphore(NULL, 0, 1000, SHM_SEMAPHORE_NAME);
 
-    int shmWriteIndex = 0; // куди писати наступне повідомлення
+    int shmWriteIndex = 0;
 
-    std::wcout << L"[LOGGER] is ready for messages...\n";
+    // ---------------- PIPE ----------------
+    std::wcout << L"[LOGGER] Creating PIPE: " << PIPE_CLIENT_TO_LOGGER << L"\n";
 
-    // ==========================
-    //   ОСНОВНИЙ ЦИКЛ ЛОГЕРА
-    // ==========================
+    HANDLE hPipe = CreateNamedPipeW(
+        PIPE_CLIENT_TO_LOGGER,
+        PIPE_ACCESS_INBOUND,
+        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+        1,
+        sizeof(ChatMessage),
+        sizeof(ChatMessage),
+        0,
+        NULL
+    );
+
+    if (hPipe == INVALID_HANDLE_VALUE)
+    {
+        std::wcerr << L"[LOGGER] ERROR CreateNamedPipe. Code = " << GetLastError() << L"\n";
+        return 1;
+    }
+
+    CreateThread(NULL, 0, PipeReaderThread, hPipe, 0, NULL);
+
+    std::wcout << L"[LOGGER] Ready for MQ + PIPE messages...\n";
+
+    // ======================= MAIN LOOP (MQ) =======================
     while (true)
     {
-        // Чекаємо поки клієнт додасть повідомлення у чергу
         WaitForSingleObject(hQueueSem, INFINITE);
-
-        // Блокуємо доступ до черги
         WaitForSingleObject(hQueueMutex, INFINITE);
 
         if (queue->count > 0)
         {
             MQMessage& slot = queue->messages[queue->head];
 
-            // Створюємо ChatMessage для shared memory
             ChatMessage msg;
             msg.senderId = CLIENT_MQUEUE_ID;
             wcsncpy_s(msg.text, slot.text, MAX_TEXT);
 
-            // Переміщуємо head
             queue->head = (queue->head + 1) % MQ_QUEUE_SIZE;
             queue->count--;
 
             ReleaseMutex(hQueueMutex);
 
-            // Пишемо у SHM
             WaitForSingleObject(hShmMutex, INFINITE);
 
             shmMessages[shmWriteIndex] = msg;
             shmWriteIndex = (shmWriteIndex + 1) % 10;
 
             ReleaseMutex(hShmMutex);
-
-            // Сигнал WinForms, що нове повідомлення готове
             ReleaseSemaphore(hShmSem, 1, NULL);
 
-            // Вивід у консоль логера
-            std::wcout << L"[LOGGER] Message delivered: " << msg.text << L"\n";
-
+            std::wcout << L"[LOGGER MQ] Received: " << msg.text << L"\n";
         }
         else
         {
             ReleaseMutex(hQueueMutex);
         }
     }
-
     // (ніколи не виконується, але по стандарту)
     UnmapViewOfFile(queue);
     UnmapViewOfFile(shmMessages);
@@ -135,3 +166,4 @@ int main()
 
     return 0;
 }
+
