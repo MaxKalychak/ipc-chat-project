@@ -7,7 +7,7 @@ int main()
 {
     std::wcout << L"[MQ Client] Launching the client message queue...\n";
 
-    // 1. Відкриваємо file mapping для черги
+    // 1. і???????? file mapping ??? ?????
     HANDLE hMap = OpenFileMapping(
         FILE_MAP_ALL_ACCESS,
         FALSE,
@@ -31,10 +31,10 @@ int main()
         return 1;
     }
 
-    // 2. Відкриваємо м’ютекс
+    // 2. і???????? ??????
     HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, MQ_MUTEX_NAME);
 
-    // 3. Відкриваємо семафор (показує наявність нових повідомлень)
+    // 3. і???????? ??????? (?????? ????????? ????? ??????????)
     HANDLE hSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, MQ_SEMAPHORE_NAME);
 
     if (!hMutex || !hSem) {
@@ -55,17 +55,17 @@ int main()
             continue;
         }
 
-        // Блокуємо чергу
+        // ??????? ?????
         WaitForSingleObject(hMutex, INFINITE);
 
-        // Перевіряємо чи є місце
+        // ?????????? ?? ? ????
         if (queue->count == MQ_QUEUE_SIZE) {
             std::wcout << L"[MQ Client] The queue is full!\n";
             ReleaseMutex(hMutex);
             continue;
         }
 
-        // Записуємо повідомлення
+        // ???????? ???????????
         MQMessage& msg = queue->messages[queue->tail];
         wcsncpy_s(msg.text, text.c_str(), 255);
 
@@ -76,7 +76,7 @@ int main()
 
         ReleaseMutex(hMutex);
 
-        // Сигналізуємо logger, що повідомлення є
+        // ?????????? logger, ?? ??????????? ?
         ReleaseSemaphore(hSem, 1, NULL);
     }
 

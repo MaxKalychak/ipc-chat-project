@@ -36,7 +36,7 @@ DWORD WINAPI PipeReaderThread(LPVOID param)
         }
 
         // -------------------------------
-        // Запис у SHM
+        // Г‡Г ГЇГЁГ± Гі SHM
         // -------------------------------
         HANDLE hShm = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, SHM_NAME);
         if (!hShm) continue;
@@ -153,7 +153,7 @@ int main()
             ReleaseMutex(hQueueMutex);
         }
     }
-    // (ніколи не виконується, але по стандарту)
+    // (Г­ВіГЄГ®Г«ГЁ Г­ГҐ ГўГЁГЄГ®Г­ГіВєГІГјГ±Гї, Г Г«ГҐ ГЇГ® Г±ГІГ Г­Г¤Г Г°ГІГі)
     UnmapViewOfFile(queue);
     UnmapViewOfFile(shmMessages);
 
