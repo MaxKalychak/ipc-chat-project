@@ -36,7 +36,7 @@ DWORD WINAPI PipeReaderThread(LPVOID param)
         }
 
         // -------------------------------
-        // Çàïèñ ó SHM
+        // Write to shared memory
         // -------------------------------
         HANDLE hShm = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, SHM_NAME);
         if (!hShm) continue;
@@ -153,10 +153,10 @@ int main()
             ReleaseMutex(hQueueMutex);
         }
     }
-    // (í³êîëè íå âèêîíóºòüñÿ, àëå ïî ñòàíäàðòó)
+    
     UnmapViewOfFile(queue);
     UnmapViewOfFile(shmMessages);
-
+    
     CloseHandle(hMap);
     CloseHandle(hQueueMutex);
     CloseHandle(hQueueSem);
