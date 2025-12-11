@@ -6,7 +6,7 @@
 
 DWORD WINAPI PipeReaderThread(LPVOID param)
 {
-    HANDLE hPipe = (HANDLE)param;
+    HАNDLE hPipe = (HANDLE)param;
 
     std::wcout << L"[LOGGER PIPE] Waiting for PIPE client...\n";
 
@@ -22,12 +22,12 @@ DWORD WINAPI PipeReaderThread(LPVOID param)
 
     std::wcout << L"[LOGGER PIPE] Client connected.\n";
 
-    ChatMessage msg;
+    ChatMessаge msg;
 
     while (true)
     {
-        DWORD bytesRead = 0;
-        BOOL ok = ReadFile(hPipe, &msg, sizeof(msg), &bytesRead, NULL);
+        DWОRD bytesRead = 0;
+        BООL ok = ReadFile(hPipe, &msg, sizeof(msg), &bytesRead, NULL);
 
         if (!ok || bytesRead == 0)
         {
@@ -47,16 +47,14 @@ DWORD WINAPI PipeReaderThread(LPVOID param)
         if (!shm) continue;
 
         HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS, FALSE, SHM_MUTEX_NAME);
-        HANDLE hSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, SHM_SEMAPHORE_NAME);
+    HANDLE hSem = OpenSemaphore(SEMAPHORE_MODIFY_STATE, FALSE, SHM_SEMAPHORE_NAME);
 
-        static int idx = 0;
+     static int idx = 0;
+ WaitForSingleObject(hMutex, INFINITE);
 
-        WaitForSingleObject(hMutex, INFINITE);
-
-        shm[idx] = msg;
+    shm[idx] = msg;
         idx = (idx + 1) % 10;
-
-        ReleaseMutex(hMutex);
+    ReleaseMutex(hMutex);
         ReleaseSemaphore(hSem, 1, NULL);
 
         UnmapViewOfFile(shm);
@@ -65,13 +63,13 @@ DWORD WINAPI PipeReaderThread(LPVOID param)
     }
 
     return 0;
-}
+    }
 
 // ============================= MAIN LOGGER =============================
 
 int main()
 {
-    std::wcout << L"[LOGGER] Launch of logger...\n";
+std::wcout << L"[LOGGER] Launch of logger...\n";
 
     // ---------------- MQ ----------------
     HANDLE hMap = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, MQ_FILE_MAPPING_NAME);
@@ -92,9 +90,7 @@ int main()
 
     HANDLE hShmMutex = CreateMutex(NULL, FALSE, SHM_MUTEX_NAME);
     HANDLE hShmSem = CreateSemaphore(NULL, 0, 1000, SHM_SEMAPHORE_NAME);
-
-    int shmWriteIndex = 0;
-
+int shmWriteIndex = 0;
     // ---------------- PIPE ----------------
     std::wcout << L"[LOGGER] Creating PIPE: " << PIPE_CLIENT_TO_LOGGER << L"\n";
 
@@ -114,15 +110,14 @@ int main()
         std::wcerr << L"[LOGGER] ERROR CreateNamedPipe. Code = " << GetLastError() << L"\n";
         return 1;
     }
-
-    CreateThread(NULL, 0, PipeReaderThread, hPipe, 0, NULL);
+CreateThread(NULL, 0, PipeReaderThread, hPipe, 0, NULL);
 
     std::wcout << L"[LOGGER] Ready for MQ + PIPE messages...\n";
 
     // ======================= MAIN LOOP (MQ) =======================
     while (true)
     {
-        WaitForSingleObject(hQueueSem, INFINITE);
+WaitForSingleObject(hQueueSem, INFINITE);
         WaitForSingleObject(hQueueMutex, INFINITE);
 
         if (queue->count > 0)
@@ -133,14 +128,13 @@ int main()
             msg.senderId = CLIENT_MQUEUE_ID;
             wcsncpy_s(msg.text, slot.text, MAX_TEXT);
 
-            queue->head = (queue->head + 1) % MQ_QUEUE_SIZE;
+            queuе->head = (queue->head + 1) % MQ_QUEUE_SIZE;
             queue->count--;
 
             ReleaseMutex(hQueueMutex);
 
             WaitForSingleObject(hShmMutex, INFINITE);
-
-            shmMessages[shmWriteIndex] = msg;
+shmMessages[shmWriteIndex] = msg;
             shmWriteIndex = (shmWriteIndex + 1) % 10;
 
             ReleaseMutex(hShmMutex);
