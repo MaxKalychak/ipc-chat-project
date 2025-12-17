@@ -106,9 +106,9 @@ int main()
     std::wcout << L"\nLaunching modules (pipe + mqueue + logger)...\n";
 
     // Відносні шляхи (відносно controller.exe)
-    std::wstring loggerPath = L"..\\..\\logger_shm\\Debug\\logger_shm.exe";
-    std::wstring mqueuePath = L"..\\..\\client_mqueue\\Debug\\client_mqueue.exe";
-    std::wstring pipePath = L"..\\..\\client_pipe\\Debug\\client_pipe.exe";
+    std::wstring loggerPath = L"..\\logger_shm\\x64\\Debug\\logger_shm.exe";
+    std::wstring mqueuePath = L"..\\client_mqueue\\x64\\Debug\\client_mqueue.exe";
+    std::wstring pipePath = L"..\\client_pipe\\x64\\Debug\\client_pipe.exe";
 
     LaunchProcess(loggerPath, L"", L"logger_shm.exe");
     LaunchProcess(mqueuePath, L"", L"client_mqueue.exe");
