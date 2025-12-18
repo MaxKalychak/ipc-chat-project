@@ -3,61 +3,29 @@
 
 #include <windows.h>
 
-// ============================================================
-//                 СПІЛЬНІ ПАРАМЕТРИ IPC ЧАТУ
-// ============================================================
-
-// Максимальна довжина повідомлення
 #define MAX_TEXT 256
 
-// Внутрішній формат повідомлення для обміну
 struct ChatMessage
 {
-    int senderId;              // 1 = client_pipe, 2 = client_mqueue
-    wchar_t text[MAX_TEXT];    // сам текст повідомлення
+    int senderId;             
+    wchar_t text[MAX_TEXT];
 };
 
-// ============================================================
-//                    NAMED PIPE (Pipes/FIFO)
-// ============================================================
-//
-// Канали для interaction між client_pipe ? logger або controller.
-// У Windows pipes називаються через \\.\pipe\
-// ============================================================
 
 #define PIPE_CLIENT_TO_LOGGER  L"\\\\.\\pipe\\ChatPipe_ClientToLogger"
 #define PIPE_LOGGER_TO_CLIENT  L"\\\\.\\pipe\\ChatPipe_LoggerToClient"
 
-// Можна зробити кілька каналів, якщо треба більше процесів
-
-// ============================================================
-//                    MESSAGE QUEUE (Windows-styled)
-// ============================================================
-// У Windows НІМАЄ POSIX msgget/msgsnd,
-// тому message queue моделюється через:
-// 1) Named Pipe (як альтернатива POSIX msgqueue) або
-// 2) File Mapping + Mutex/Semaphore.
-//
-// Тут ми зробимо QUEUE через FileMapping (кроспроцесна черга).
-// ============================================================
 
 #define MQ_FILE_MAPPING_NAME   L"Local\\ChatMessageQueue"
 #define MQ_MUTEX_NAME          L"Local\\ChatMQ_Mutex"
 #define MQ_SEMAPHORE_NAME      L"Local\\ChatMQ_Semaphore"
-#define MQ_QUEUE_SIZE          10  // кількість повідомлень у черзі
+#define MQ_QUEUE_SIZE          10  
 
 struct MQSlot
 {
     bool used;
     ChatMessage msg;
 };
-
-// ============================================================
-//            SHARED MEMORY + SEMAPHORE (LOGGER)
-// ============================================================
-//
-// Логер і клієнти спільно використовують сегмент пам’яті.
-// ============================================================
 
 #define SHM_NAME               L"Local\\ChatSharedMemory"
 #define SHM_SIZE               (sizeof(ChatMessage) * 10)
@@ -66,22 +34,8 @@ struct MQSlot
 #define SHM_MUTEX_NAME         L"Local\\ChatSHM_Mutex"
 
 
-// ============================================================
-//                   ІДЕНТИФІКАТОРИ ПРОЦЕСІВ
-// ============================================================
-//
-// Щоб controller знав, хто що робить
-// ============================================================
-
 #define CLIENT_PIPE_ID         1
 #define CLIENT_MQUEUE_ID       2
-
-// ============================================================
-//                    НАЗВИ EXE ФАЙЛІВ
-// ============================================================
-//
-// Це потрібно controller.exe для CreateProcess()
-// ============================================================
 
 #define EXE_CONTROLLER         L"controller.exe"
 #define EXE_PIPE_CLIENT        L"client_pipe.exe"
@@ -100,4 +54,4 @@ struct MQQueue {
 };
 
 
-#endif // COMMON_H
+#endif

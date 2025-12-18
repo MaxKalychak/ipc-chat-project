@@ -7,9 +7,7 @@ int wmain()
 {
     std::wcout << L"[PIPE Client] Launching client_pipe...\n";
 
-    // ============================
-    // Підключення до пайпа logger'а
-    // ============================
+
     std::wcout << L"[PIPE Client] Waiting for pipe...\n";
 
     if (!WaitNamedPipeW(PIPE_CLIENT_TO_LOGGER, NMPWAIT_WAIT_FOREVER))
@@ -21,7 +19,7 @@ int wmain()
 
     HANDLE hPipe = CreateFileW(
         PIPE_CLIENT_TO_LOGGER,
-        GENERIC_WRITE,      // Pipe → тільки запис
+        GENERIC_WRITE,   
         0,
         nullptr,
         OPEN_EXISTING,
@@ -38,9 +36,6 @@ int wmain()
 
     std::wcout << L"[PIPE Client] Connected to logger pipe.\n";
 
-    // =====================
-    // ОСНОВНИЙ ЦИКЛ
-    // =====================
     while (true)
     {
         std::wstring text;
@@ -53,7 +48,6 @@ int wmain()
         if (text.empty())
             continue;
 
-        // Формуємо ChatMessage
         ChatMessage msg{};
         msg.senderId = CLIENT_PIPE_ID;
         wcsncpy_s(msg.text, text.c_str(), MAX_TEXT - 1);

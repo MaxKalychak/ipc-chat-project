@@ -31,20 +31,16 @@ namespace controller {
 
         ~MyForm()
         {
-            // 1. STOP THREAD SAFELY
             running = false;
 
-            // CRITICAL FIX: Wake up thread if stuck
             if (hShmSem != nullptr) {
                 ReleaseSemaphore(hShmSem, 1, NULL);
             }
 
-            // Wait for thread to finish gracefully
             if (shmThread && shmThread->IsAlive) {
                 shmThread->Join(500);
             }
 
-            // 2. CLEANUP RESOURCES
             if (shmMessages) { UnmapViewOfFile(shmMessages); shmMessages = nullptr; }
 
             SafeCloseHandle(hShm);
@@ -104,7 +100,7 @@ namespace controller {
         TextBox^ txtLog;
         Label^ lblStatus;
         Panel^ headerPanel;
-        Panel^ spacerPanel; // NEW: Spacer for layout
+        Panel^ spacerPanel; 
         System::Windows::Forms::Timer^ connectTimer;
         System::ComponentModel::Container^ components;
 
@@ -117,14 +113,12 @@ namespace controller {
             this->BackColor = Drawing::Color::FromArgb(30, 30, 30);
             this->ForeColor = Drawing::Color::White;
 
-            // --- 1. HEADER PANEL ---
             headerPanel = gcnew Panel();
             headerPanel->Dock = DockStyle::Top;
             headerPanel->Height = 80;
             headerPanel->BackColor = Drawing::Color::FromArgb(45, 45, 48);
             this->Controls->Add(headerPanel);
 
-            // --- TITLE ---
             lblTitle = gcnew Label();
             lblTitle->Text = L"IPC PROCESS CONTROLLER";
             lblTitle->Font = gcnew Drawing::Font(L"Segoe UI", 14, FontStyle::Bold);
@@ -133,7 +127,6 @@ namespace controller {
             lblTitle->AutoSize = true;
             headerPanel->Controls->Add(lblTitle);
 
-            // --- STATUS ---
             lblStatus = gcnew Label();
             lblStatus->Text = L"[STATUS] System Stopped";
             lblStatus->Font = gcnew Drawing::Font(L"Segoe UI", 10);
@@ -142,7 +135,6 @@ namespace controller {
             lblStatus->AutoSize = true;
             headerPanel->Controls->Add(lblStatus);
 
-            // --- START BUTTON ---
             btnStart = gcnew Button();
             btnStart->Text = L"LAUNCH SYSTEM";
             btnStart->Font = gcnew Drawing::Font(L"Segoe UI", 9, FontStyle::Bold);
@@ -157,19 +149,16 @@ namespace controller {
             btnStart->Click += gcnew EventHandler(this, &MyForm::btnStart_Click);
             headerPanel->Controls->Add(btnStart);
 
-            // --- 2. SPACER PANEL (Moves Text Lower) ---
             spacerPanel = gcnew Panel();
             spacerPanel->Dock = DockStyle::Top;
-            spacerPanel->Height = 15; // <--- GAP SIZE
-            spacerPanel->BackColor = this->BackColor; // Transparent/Match Background
+            spacerPanel->Height = 15; 
+            spacerPanel->BackColor = this->BackColor; 
             this->Controls->Add(spacerPanel);
 
-            // --- 3. LOG DISPLAY (Corrected Scrolling) ---
             txtLog = gcnew TextBox();
             txtLog->Multiline = true;
             txtLog->ReadOnly = true;
 
-            // FIX: Use Vertical scroll and WordWrap for Chat feel
             txtLog->ScrollBars = ScrollBars::Vertical;
             txtLog->WordWrap = true;
 
@@ -178,19 +167,13 @@ namespace controller {
             txtLog->ForeColor = Drawing::Color::FromArgb(0, 255, 0);
             txtLog->Font = gcnew Drawing::Font(L"Consolas", 10);
 
-            // Dock fill will take up remaining space after Header + Spacer
             txtLog->Dock = DockStyle::Fill;
             this->Controls->Add(txtLog);
 
-            // Fix Z-Order to ensure docking works (Header -> Spacer -> Log)
             headerPanel->BringToFront();
             spacerPanel->BringToFront();
             txtLog->BringToFront();
-            // Note: In WinForms "BringToFront" puts it at top of Z-order, 
-            // but Docking priority is often reverse. If layout looks wrong, 
-            // remove these BringToFront calls, but adding in order (Header, Spacer, Log) usually works.
-
-            // --- TIMER ---
+           
             this->connectTimer = gcnew System::Windows::Forms::Timer(this->components);
             this->connectTimer->Interval = 500;
             this->connectTimer->Tick += gcnew EventHandler(this, &MyForm::OnConnectTimerTick);
@@ -198,14 +181,10 @@ namespace controller {
 
         void AddLog(String^ msg) {
             txtLog->AppendText(msg + Environment::NewLine);
-            // Force scroll to bottom
             txtLog->SelectionStart = txtLog->Text->Length;
             txtLog->ScrollToCaret();
         }
 
-        // ==========================================
-        // LOGIC METHODS (Unchanged)
-        // ==========================================
         void btnStart_Click(Object^ sender, EventArgs^ e)
         {
             if (!hMqMap) {
