@@ -1,2 +1,3 @@
 ﻿  controller.cpp
+C:\Users\Admin\source\repos\MaxKalychak\ipc-chat-project\IPC_Processes\controller\controller.cpp(112,22): warning C4552: '-': result of expression not used
   controller.vcxproj -> C:\Users\Admin\Source\Repos\MaxKalychak\ipc-chat-project\IPC_Processes\controller\x64\Debug\controller.exe

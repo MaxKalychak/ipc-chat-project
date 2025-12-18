@@ -20,7 +20,7 @@ void LaunchProcess(const std::wstring& path, const std::wstring& args, const std
         buffer.data(),
         nullptr, nullptr,
         FALSE,
-        CREATE_NEW_CONSOLE,   // запуск у новій консолі
+        CREATE_NEW_CONSOLE,  
         nullptr, nullptr,
         &si, &pi
     );
@@ -43,9 +43,6 @@ int main()
     std::wcout << L"=== IPC CONTROLLER ===\n";
     std::wcout << L"Initializing Message Queue...\n";
 
-    // ====================================================
-    // 1. Create MQ (FileMapping + Mutex + Semaphores)
-    // ====================================================
 
     HANDLE hMap = CreateFileMappingW(
         INVALID_HANDLE_VALUE,
@@ -98,14 +95,8 @@ int main()
     }
     std::wcout << L"[CONTROLLER] Semaphore OK\n";
 
-
-    // ====================================================
-    // 2. Launch logger + mqueue client + pipe client
-    // ====================================================
-
     std::wcout << L"\nLaunching modules (pipe + mqueue + logger)...\n";
 
-    // Відносні шляхи (відносно controller.exe)
     std::wstring loggerPath = L"..\\logger_shm\\x64\\Debug\\logger_shm.exe";
     std::wstring mqueuePath = L"..\\client_mqueue\\x64\\Debug\\client_mqueue.exe";
     std::wstring pipePath = L"..\\client_pipe\\x64\\Debug\\client_pipe.exe";
@@ -114,15 +105,11 @@ int main()
     LaunchProcess(mqueuePath, L"", L"client_mqueue.exe");
     LaunchProcess(pipePath, L"", L"client_pipe.exe");
 
-
-    // ====================================================
-    // 3. Controller "lives" until user presses ENTER
-    // ====================================================
     std::wcout << L"\nAll modules launched. Controller is now waiting...\n";
     std::wcout << L"Press ENTER to exit controller.\n";
 
     std::wcin.get();
-    std::wcin.get(); // щоб коректно пропустити символ
+    std::wcin.get(); -
 
     UnmapViewOfFile(queue);
     CloseHandle(hMap);
